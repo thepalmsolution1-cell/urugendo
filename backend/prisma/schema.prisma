@@ -1,4 +1,5 @@
-// Prisma Schema for Urugendo PostgreSQL Database
+// Urugendo PostgreSQL schema — aligned to Functional Requirements Baseline v1.0 (FR-01–FR-33)
+// Product: experience-planning platform (catalog data + plans + reservations; not venue ops / wallet)
 
 generator client {
   provider = "prisma-client-js"
@@ -9,11 +10,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum VerificationStatus {
-  PENDING
-  VERIFIED
-  REJECTED
-}
+// --- Enums ---
 
 enum Role {
   USER
@@ -21,46 +18,404 @@ enum Role {
   ADMIN
 }
 
-model User {
-  id           String     @id @default(uuid())
-  email        String     @unique
-  name         String
-  contactPhone String?
-  role         Role       @default(USER)
-  providers    Provider[]
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+enum PreferredLanguage {
+  EN
+  RW
 }
+
+/// Provider listing review (FR-25 / FR-26)
+enum VerificationStatus {
+  PENDING
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+/// Catalog offering availability (FR-07, FR-16)
+enum AvailabilityStatus {
+  AVAILABLE
+  LIMITED
+  UNAVAILABLE
+  UNKNOWN
+}
+
+/// Provider / experience component category (FR-06)
+enum ProviderCategory {
+  RESTAURANT
+  CAFE
+  ACTIVITY
+  ATTRACTION
+  HOTEL
+  TRANSPORT
+  EVENT
+  OTHER
+}
+
+/// Lifecycle of a user's assembled plan (FR-10, FR-18)
+enum PlanStatus {
+  DRAFT
+  SAVED
+  ARCHIVED
+}
+
+/// Reservation request flow (FR-21) — never CONFIRMED without provider action
+enum ReservationStatus {
+  REQUESTED
+  PROCESSING
+  CONFIRMED
+  REJECTED
+  CANCELLED
+}
+
+enum NotificationType {
+  RESERVATION_UPDATE
+  PLAN_UPDATE
+  PROVIDER_RESPONSE
+  SYSTEM
+}
+
+// --- Auth & profile (FR-01, FR-02, FR-03, FR-31) ---
+
+model User {
+  id           String  @id @default(uuid())
+  email        String? @unique
+  contactPhone String? @unique
+  passwordHash String?
+  name         String
+  role         Role    @default(USER)
+
+  preferredLanguage     PreferredLanguage @default(EN)
+  /// e.g. ["Kigali", "Musanze"]
+  preferredLocations    String[]          @default([])
+  /// e.g. ["calm", "cozy", "affordable"] — FR-08 preference vocabulary
+  experiencePreferences String[]          @default([])
+
+  emailVerifiedAt DateTime?
+  phoneVerifiedAt DateTime?
+
+  providers     Provider[]
+  requests      ExperienceRequest[]
+  plans         ExperiencePlan[]
+  favorites     Favorite[]
+  reservations  Reservation[]
+  notifications Notification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([role])
+}
+
+// --- Taxonomy (FR-27) ---
+
+model Category {
+  id          String  @id @default(uuid())
+  slug        String  @unique
+  nameEn      String
+  nameRw      String?
+  description String?
+  isActive    Boolean @default(true)
+
+  experiences Experience[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Tag {
+  id     String  @id @default(uuid())
+  slug   String  @unique
+  nameEn String
+  nameRw String?
+
+  experiences ExperienceTag[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Location {
+  id        String  @id @default(uuid())
+  slug      String  @unique
+  nameEn    String
+  nameRw    String?
+  region    String?
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// --- Providers & catalog experiences (FR-15–FR-17, FR-22–FR-26) ---
 
 model Provider {
   id                 String             @id @default(uuid())
   name               String
-  category           String
+  category           ProviderCategory
+  description        String?
   contactEmail       String
   contactPhone       String
+  /// Human-readable place string (city / area); pair with Location catalog later if needed
   location           String
+  address            String?
+  /// Price band in RWF (whole francs)
+  priceRangeMin      Int?
+  priceRangeMax      Int?
+  rating             Float?
+  photos             String[]           @default([])
   verificationStatus VerificationStatus @default(PENDING)
-  userId             String?
-  user               User?              @relation(fields: [userId], references: [id])
-  experiences        Experience[]
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  isActive           Boolean            @default(true)
+  /// When listing data (prices/menus/availability) was last refreshed — FR-17 / FR-30
+  dataUpdatedAt      DateTime           @default(now())
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  experiences  Experience[]
+  menuItems    MenuItem[]
+  favorites    Favorite[]
+  reservations Reservation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([location])
+  @@index([verificationStatus])
+  @@index([userId])
 }
 
+/// A bookable / combinable catalog offering from a provider (FR-16)
 model Experience {
   id                 String             @id @default(uuid())
   name               String
   description        String?
-  category           String
+  category           ProviderCategory
   location           String
-  price              Float
+  /// Estimated unit price in RWF (whole francs) — budget engine uses this, not the LLM
+  priceRwf           Int
+  durationMinutes    Int?
+  capacity           Int?
+  availabilityStatus AvailabilityStatus @default(UNKNOWN)
   verificationStatus VerificationStatus @default(PENDING)
-  providerId         String?
-  provider           Provider?          @relation(fields: [providerId], references: [id])
-  
-  // Embedding stored as JSON string / float array for local dev (pgvector extension can be activated when installed on Postgres server)
-  embedding          String?
+  isActive           Boolean            @default(true)
+  photos             String[]           @default([])
 
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  providerId String?
+  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  categoryId String?
+  categoryRef Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  /// Embedding as JSON float array until pgvector is enabled on the server
+  embedding String?
+
+  tags             ExperienceTag[]
+  planComponents   PlanComponent[]
+  favorites        Favorite[]
+  reservations     Reservation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([location])
+  @@index([priceRwf])
+  @@index([availabilityStatus])
+  @@index([verificationStatus])
+  @@index([providerId])
+}
+
+model ExperienceTag {
+  experienceId String
+  tagId        String
+
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  tag        Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([experienceId, tagId])
+}
+
+/// Optional menu / service line items for restaurants etc. (FR-17, FR-23)
+model MenuItem {
+  id          String  @id @default(uuid())
+  providerId  String
+  name        String
+  description String?
+  priceRwf    Int
+  isAvailable Boolean @default(true)
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([providerId])
+}
+
+// --- Intent / NL request (FR-04, FR-05, FR-28) ---
+
+model ExperienceRequest {
+  id      String @id @default(uuid())
+  userId  String?
+  user    User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  /// Original natural-language text (EN or RW)
+  rawText String
+  /// Structured intent from ML (location, people, budget, occasion, preferences, experience_types, …)
+  extractedIntent Json?
+  /// Clarification Q&A turns when required fields are missing
+  clarification   Json?
+
+  location         String?
+  people           Int?
+  budgetRwf        Int?
+  occasion         String?
+  preferences      String[] @default([])
+  experienceTypes  String[] @default([])
+  needsTransport   Boolean?
+  needsAccommodation Boolean?
+  requestedAt      DateTime?
+
+  plans ExperiencePlan[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// --- Experience builder & budget (FR-09–FR-14, FR-18) ---
+
+model ExperiencePlan {
+  id        String     @id @default(uuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestId String?
+  request   ExperienceRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  title    String
+  status   PlanStatus @default(DRAFT)
+  location String?
+  /// Planned start of the experience
+  startsAt DateTime?
+  people   Int        @default(1)
+  /// User budget ceiling in RWF
+  budgetRwf Int?
+  /// Sum of component prices — maintained by budget engine (FR-12)
+  estimatedTotalRwf Int @default(0)
+  /// budgetRwf - estimatedTotalRwf (can be negative if over) — FR-13
+  remainingRwf      Int?
+  notes    String?
+
+  components   PlanComponent[]
+  reservations Reservation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([requestId])
+}
+
+model PlanComponent {
+  id     String @id @default(uuid())
+  planId String
+  plan   ExperiencePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  /// Snapshot fields so plan stays readable if catalog prices change later
+  componentType ProviderCategory
+  name          String
+  priceRwf      Int
+  sortOrder     Int     @default(0)
+  notes         String?
+
+  experienceId String?
+  experience   Experience? @relation(fields: [experienceId], references: [id], onDelete: SetNull)
+  providerId   String?
+
+  reservations Reservation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([planId])
+  @@index([experienceId])
+}
+
+// --- Favorites (FR-19) ---
+
+model Favorite {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  providerId   String?
+  provider     Provider?   @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  experienceId String?
+  experience   Experience? @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([providerId])
+  @@index([experienceId])
+  @@unique([userId, providerId])
+  @@unique([userId, experienceId])
+}
+
+// --- Reservations (FR-20, FR-21, FR-24) ---
+
+model Reservation {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  providerId String
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+
+  planId String?
+  plan   ExperiencePlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  planComponentId String?
+  planComponent   PlanComponent? @relation(fields: [planComponentId], references: [id], onDelete: SetNull)
+
+  experienceId String?
+  experience   Experience? @relation(fields: [experienceId], references: [id], onDelete: SetNull)
+
+  reservedDate   DateTime
+  reservedTime   String?
+  people         Int      @default(1)
+  specialRequest String?
+  status         ReservationStatus @default(REQUESTED)
+  providerNote   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([providerId])
+  @@index([planId])
+  @@index([status])
+}
+
+// --- Notifications (FR-33) ---
+
+model Notification {
+  id     String           @id @default(uuid())
+  userId String
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    NotificationType
+  title   String
+  body    String
+  payload Json?
+  readAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+  @@index([type])
 }
