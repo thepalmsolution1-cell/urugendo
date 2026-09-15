@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, HTTPException, status
 from openai import (
     AuthenticationError,
@@ -18,6 +19,11 @@ async def extract_intent(request: IntentRequest):
     try:
         extracted_data = nvidia_client.extract_intent(request.text)
         return IntentResponse(**extracted_data)
+    except json.JSONDecodeError as err:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Malformed Model Response: Failed to parse raw output from AI model as valid JSON. ({str(err)})"
+        )
     except APITimeoutError as err:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
