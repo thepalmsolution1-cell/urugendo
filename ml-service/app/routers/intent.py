@@ -1,5 +1,10 @@
 from fastapi import APIRouter, HTTPException, status
-from openai import AuthenticationError
+from openai import (
+    AuthenticationError,
+    APITimeoutError,
+    APIConnectionError,
+    APIStatusError,
+)
 from app.models.intent import IntentRequest, IntentResponse
 from app.services.nvidia_client import NVIDIAClient
 
@@ -13,6 +18,16 @@ async def extract_intent(request: IntentRequest):
     try:
         extracted_data = nvidia_client.extract_intent(request.text)
         return IntentResponse(**extracted_data)
+    except APITimeoutError as err:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=f"NVIDIA API Timeout: Request to NVIDIA NIM service timed out. ({str(err)})"
+        )
+    except (APIConnectionError, APIStatusError) as err:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"NVIDIA API Error: Upstream service error. ({str(err)})"
+        )
     except (ValueError, AuthenticationError) as err:
         err_msg = str(err)
         if "API_KEY" in err_msg or "Authentication" in err_msg or "401" in err_msg:
