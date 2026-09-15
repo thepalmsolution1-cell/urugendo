@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.models.intent import IntentRequest, IntentResponse, ExtractedIntent
+from app.services.nvidia_service import check_nvidia_connectivity
 
 app = FastAPI(
     title="Urugendo ML Service",
@@ -24,10 +25,15 @@ async def health_check():
     return {"status": "ok", "service": "ml-service"}
 
 
+@app.get("/api/v1/nvidia-health", tags=["NVIDIA NIM"])
+async def nvidia_health_check():
+    """Verify NVIDIA NIM API endpoint reachability."""
+    return check_nvidia_connectivity()
+
+
 @app.post("/api/v1/extract-intent", response_model=IntentResponse, tags=["AI / Intent Extraction"])
 async def extract_intent(request: IntentRequest):
     """Placeholder endpoint for NVIDIA NIM intent extraction."""
-    # Request/response model baseline structure - implementation details pending
     placeholder_intent = ExtractedIntent(
         category="ecotourism",
         location="Musanze, Rwanda",

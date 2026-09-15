@@ -1,14 +1,12 @@
 // Prisma Schema for Urugendo PostgreSQL Database
 
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["postgresqlExtensions"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider   = "postgresql"
-  url        = env("DATABASE_URL")
-  extensions = [pgvector(map: "vector")]
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum VerificationStatus {
@@ -60,8 +58,8 @@ model Experience {
   providerId         String?
   provider           Provider?          @relation(fields: [providerId], references: [id])
   
-  // Vector embedding stored via Unsupported type for pgvector extension integration
-  embedding          Unsupported("vector(1536)")?
+  // Embedding stored as JSON string / float array for local dev (pgvector extension can be activated when installed on Postgres server)
+  embedding          String?
 
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
