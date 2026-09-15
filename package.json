@@ -1,0 +1,28 @@
+{
+  "name": "urugendo-monorepo",
+  "version": "1.0.0",
+  "description": "Urugendo - Hybrid Web Application Monorepo (Express, FastAPI, React)",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "dev:ml": "cd ml-service && uvicorn main:app --reload --port 8000",
+    "prisma:generate": "npm run prisma:generate --workspace=backend",
+    "prisma:migrate": "npm run prisma:migrate --workspace=backend"
+  },
+  "keywords": [
+    "urugendo",
+    "monorepo",
+    "express",
+    "fastapi",
+    "react",
+    "prisma",
+    "pgvector"
+  ],
+  "author": "",
+  "license": "ISC"
+}
