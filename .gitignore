@@ -24,10 +24,17 @@ build/
 *.sqlite
 *.sqlite3
 
-# Environment & Credentials
+# Environment & Credentials (API keys, DB passwords — never commit real secrets)
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+credentials.json
+secrets.json
 
 # System Files
 .DS_Store
