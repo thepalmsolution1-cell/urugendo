@@ -1,6 +1,7 @@
 import os
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
+from openai import OpenAI
 
 load_dotenv()
 
@@ -17,11 +18,44 @@ INTENT_EXTRACTION_SYSTEM_PROMPT = (
 class NVIDIAClient:
     """NVIDIA NIM API client for intent extraction."""
 
-    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None, model: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        model: Optional[str] = None,
+        timeout: float = 30.0
+    ):
         self.api_key = api_key or os.getenv("NVIDIA_API_KEY")
         self.base_url = base_url or os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
         self.model = model or os.getenv("NVIDIA_MODEL", "meta/llama-3.1-70b-instruct")
+        self.timeout = timeout
+
+    def _get_openai_client(self) -> OpenAI:
+        if not self.api_key or self.api_key == "nvapi-your-nvidia-nim-api-key-here":
+            raise ValueError("Missing or invalid NVIDIA_API_KEY configuration.")
+        return OpenAI(
+            base_url=self.base_url,
+            api_key=self.api_key,
+            timeout=self.timeout
+        )
+
+    def extract_intent_raw(self, text: str) -> str:
+        """Calls NVIDIA NIM OpenAI-compatible chat completion API and returns raw string response."""
+        client = self._get_openai_client()
+        response = client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": INTENT_EXTRACTION_SYSTEM_PROMPT},
+                {"role": "user", "content": text}
+            ],
+            temperature=0.1,
+            top_p=0.9
+        )
+        if not response.choices or not response.choices[0].message.content:
+            raise ValueError("Received empty response from NVIDIA API.")
+        return response.choices[0].message.content.strip()
 
     def extract_intent(self, text: str) -> Dict[str, Any]:
         """Extract intent data from user natural-language text request."""
-        raise NotImplementedError("NVIDIA API call method skeleton.")
+        raw_response = self.extract_intent_raw(text)
+        raise NotImplementedError("JSON parsing pending implementation.")
