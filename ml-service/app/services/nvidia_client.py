@@ -1,4 +1,6 @@
+import json
 import os
+import re
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -39,6 +41,15 @@ class NVIDIAClient:
             timeout=self.timeout
         )
 
+    def _clean_json_response(self, content: str) -> str:
+        """Strips markdown code blocks or wrapping whitespace from model output."""
+        cleaned = content.strip()
+        # Regex to strip ```json ... ``` or ``` ... ``` code block wrappers
+        match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned, re.IGNORECASE)
+        if match:
+            cleaned = match.group(1).strip()
+        return cleaned
+
     def extract_intent_raw(self, text: str) -> str:
         """Calls NVIDIA NIM OpenAI-compatible chat completion API and returns raw string response."""
         client = self._get_openai_client()
@@ -56,6 +67,15 @@ class NVIDIAClient:
         return response.choices[0].message.content.strip()
 
     def extract_intent(self, text: str) -> Dict[str, Any]:
-        """Extract intent data from user natural-language text request."""
+        """Extract intent data from user natural-language text request and parse to dict."""
         raw_response = self.extract_intent_raw(text)
-        raise NotImplementedError("JSON parsing pending implementation.")
+        cleaned_response = self._clean_json_response(raw_response)
+        try:
+            parsed_data = json.loads(cleaned_response)
+            if not isinstance(parsed_data, dict):
+                raise ValueError("Model response is not a valid JSON object.")
+            return parsed_data
+        except (json.JSONDecodeError, ValueError) as err:
+            raise json.JSONDecodeError(
+                f"Failed to parse NVIDIA NIM JSON output: {str(err)}", cleaned_response, 0
+            ) from err
