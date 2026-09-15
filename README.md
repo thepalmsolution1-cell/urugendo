@@ -102,3 +102,38 @@ uvicorn main:app --reload --port 8000
 npm run dev:frontend
 # Starts dev server on http://localhost:5173
 ```
+
+---
+
+## ML Service API Usage Example
+
+### Intent Extraction Endpoint (`POST /api/v1/extract-intent`)
+
+Extract structured experience intent data from user free-text requests via NVIDIA NIM API integration.
+
+#### Request Example
+```bash
+curl -X POST http://localhost:8000/api/v1/extract-intent \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Looking for a romantic anniversary dinner for 2 people in Musanze with a budget of 150000 RWF, focusing on local cuisine."
+  }'
+```
+
+#### Response Example (200 OK)
+```json
+{
+  "location": "Musanze",
+  "people": 2,
+  "budget": 150000,
+  "occasion": "anniversary dinner",
+  "preferences": [
+    "romantic",
+    "local cuisine"
+  ],
+  "experience_types": [
+    "dinner",
+    "dining"
+  ]
+}
+```
