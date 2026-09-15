@@ -1,5 +1,6 @@
 import json
 from fastapi import APIRouter, HTTPException, status
+from pydantic import ValidationError
 from openai import (
     AuthenticationError,
     APITimeoutError,
@@ -19,6 +20,11 @@ async def extract_intent(request: IntentRequest):
     try:
         extracted_data = nvidia_client.extract_intent(request.text)
         return IntentResponse(**extracted_data)
+    except ValidationError as err:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Schema Validation Error: Model output structure does not match IntentResponse schema. ({str(err)})"
+        )
     except json.JSONDecodeError as err:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
