@@ -1,33 +1,49 @@
+const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
 const config = require('../config');
 const { HttpError } = require('../utils/httpError');
 
 /**
- * Auth middleware.
- * TODO(Joe): swap development header auth for real JWT/session once user auth lands.
- * Dev only: send `X-User-Id: <uuid>` of an existing User row.
+ * Auth for Owen routes: prefer Joe's JWT Bearer token; fall back to X-User-Id in development.
  */
 async function requireAuth(req, _res, next) {
   try {
-    const userId = req.header('X-User-Id');
-
-    if (!userId) {
-      if (config.nodeEnv === 'development') {
-        throw new HttpError(
-          401,
-          'Authentication required. In development, set header X-User-Id to an existing User id.'
-        );
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      if (!token) {
+        throw new HttpError(401, 'Authentication token required');
       }
-      throw new HttpError(401, 'Authentication required.');
+
+      let decoded;
+      try {
+        decoded = jwt.verify(token, config.jwtSecret);
+      } catch (err) {
+        if (err.name === 'TokenExpiredError') {
+          throw new HttpError(401, 'Token has expired. Please log in again');
+        }
+        throw new HttpError(401, 'Invalid authentication token');
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: decoded.id } });
+      if (!user) {
+        throw new HttpError(401, 'Invalid user.');
+      }
+      req.user = user;
+      return next();
     }
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      throw new HttpError(401, 'Invalid user.');
+    const userId = req.header('X-User-Id');
+    if (userId && config.nodeEnv === 'development') {
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        throw new HttpError(401, 'Invalid user.');
+      }
+      req.user = user;
+      return next();
     }
 
-    req.user = user;
-    next();
+    throw new HttpError(401, 'Authentication required.');
   } catch (err) {
     next(err);
   }
