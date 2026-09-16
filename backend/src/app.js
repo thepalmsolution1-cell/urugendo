@@ -16,7 +16,14 @@ const { HttpError } = require('./utils/httpError');
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id'],
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
