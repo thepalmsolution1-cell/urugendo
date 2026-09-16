@@ -18,6 +18,19 @@ async function listMine(req, res, next) {
   }
 }
 
+async function listPublic(req, res, next) {
+  try {
+    const providers = await providerService.listPublicProviders({
+      category: req.query.category,
+      location: req.query.location,
+      limit: req.query.limit,
+    });
+    res.json({ data: providers });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function getById(req, res, next) {
   try {
     const provider = await providerService.getProviderById(req.params.id);
@@ -107,6 +120,7 @@ async function listMenuItems(req, res, next) {
 module.exports = {
   register,
   listMine,
+  listPublic,
   getById,
   update,
   createExperience,
