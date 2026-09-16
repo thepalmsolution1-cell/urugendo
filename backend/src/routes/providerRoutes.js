@@ -6,6 +6,7 @@ const { requireAuth } = require('../middleware/auth');
 const router = express.Router();
 
 router.post('/', requireAuth, providerController.register);
+router.get('/', providerController.listPublic);
 router.get('/me', requireAuth, providerController.listMine);
 router.get('/:id', providerController.getById);
 router.patch('/:id', requireAuth, providerController.update);
