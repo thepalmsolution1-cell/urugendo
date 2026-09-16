@@ -9,7 +9,8 @@
   ],
   "scripts": {
     "dev:backend": "npm run dev --workspace=backend",
-    "dev:frontend": "npm run dev --workspace=frontend",
+    "dev:frontend": "npm run dev --prefix \"frontend/Rwanda-themed Web and Mobile App\"",
+    "dev:frontend:legacy": "npm run dev --workspace=frontend",
     "dev:ml": "cd ml-service && uvicorn main:app --reload --port 8000",
     "prisma:generate": "npm run prisma:generate --workspace=backend",
     "prisma:migrate": "npm run prisma:migrate --workspace=backend"
