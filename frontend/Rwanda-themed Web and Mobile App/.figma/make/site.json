@@ -1,0 +1,10 @@
+{
+  "description": "Explore Rwanda's culture, history, and attractions through a visually engaging platform designed for locals and tourists, enhancing their travel experience.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
