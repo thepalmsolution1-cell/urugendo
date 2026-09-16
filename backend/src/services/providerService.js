@@ -97,6 +97,35 @@ async function listMyProviders(userId) {
   });
 }
 
+/** Public catalog listings for the consumer app (verified + active). */
+async function listPublicProviders({ category, location, limit = 50 } = {}) {
+  const take = Math.min(Number(limit) || 50, 100);
+  return prisma.provider.findMany({
+    where: {
+      isActive: true,
+      verificationStatus: 'VERIFIED',
+      ...(category ? { category } : {}),
+      ...(location
+        ? { location: { contains: location, mode: 'insensitive' } }
+        : {}),
+    },
+    orderBy: { dataUpdatedAt: 'desc' },
+    take,
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      description: true,
+      location: true,
+      priceRangeMin: true,
+      priceRangeMax: true,
+      rating: true,
+      photos: true,
+      verificationStatus: true,
+    },
+  });
+}
+
 async function getProviderById(id) {
   const provider = await prisma.provider.findUnique({
     where: { id },
@@ -345,6 +374,7 @@ async function listMenuItems(providerId) {
 module.exports = {
   registerProvider,
   listMyProviders,
+  listPublicProviders,
   getProviderById,
   updateProvider,
   createExperience,
